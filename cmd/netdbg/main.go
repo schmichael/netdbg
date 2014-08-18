@@ -6,13 +6,15 @@ import (
 	"io"
 	"net"
 	"os"
+	"strings"
 
 	"github.com/schmichael/netdbg"
 	"github.com/schmichael/netdbg/filters"
 )
 
 func usage() {
-	fmt.Fprintf(os.Stderr, "%s usage: %s [listen host:port] [target host:port]\n", os.Args[0], os.Args[0])
+	fmt.Fprintf(os.Stderr,
+		"%s usage: %s [filters] [listen host:port] [target host:port]\n", os.Args[0], os.Args[0])
 	os.Exit(1)
 }
 
@@ -20,11 +22,12 @@ func main() {
 	flag.Parse()
 	numArgs := len(flag.Args())
 
-	if numArgs != 2 {
+	if numArgs != 3 {
 		usage()
 	}
-	laddrFlag := flag.Arg(0)
-	target := flag.Arg(1)
+	filterFlag := flag.Arg(0)
+	laddrFlag := flag.Arg(1)
+	target := flag.Arg(2)
 
 	// Create listener
 	laddr, err := net.ResolveTCPAddr("tcp", laddrFlag)
@@ -47,10 +50,23 @@ func main() {
 	}
 
 	// Create filter
-	filter := &filters.HumanLogger{}
+	filterChain := []netdbg.Filter{}
+	filterNames := strings.Split(filterFlag, ",")
+	if len(filterNames) == 0 {
+		fmt.Fprintf(os.Stderr, "missing filters\n")
+		usage()
+	}
+	for _, name := range filterNames {
+		filterFactory := filters.GetFilter(name)
+		if filterFactory == nil {
+			fmt.Fprintf(os.Stderr, "unknown filter: %s\n", name)
+			usage()
+		}
+		filterChain = append(filterChain, filterFactory())
+	}
 
-	fmt.Fprintf(os.Stderr, "started %s → %v → %s\n", laddrFlag, filter, target)
-	fmt.Fprintf(os.Stderr, "exited with: %v\n", netdbg.Proxy(listen, target, filter))
+	fmt.Fprintf(os.Stderr, "started %s → %v → %s\n", laddrFlag, filterFlag, target)
+	fmt.Fprintf(os.Stderr, "exited with: %v\n", netdbg.Proxy(listen, target, filterChain))
 }
 
 type nopWriteCloser struct {

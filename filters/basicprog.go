@@ -4,9 +4,19 @@ import (
 	"fmt"
 	"io"
 	"net"
+
+	"github.com/schmichael/netdbg"
 )
 
+func init() {
+	RegisterFilter(basicProgressName, newBasicProgress)
+}
+
+const basicProgressName = "prog"
+
 type BasicProgress struct{}
+
+func newBasicProgress() netdbg.Filter { return &BasicProgress{} }
 
 func (*BasicProgress) Accept(net.Conn) bool {
 	fmt.Print("⇄")
@@ -33,5 +43,5 @@ func (*BasicProgress) Close(err error) bool {
 }
 
 func (*BasicProgress) String() string {
-	return "basic-progress"
+	return basicProgressName
 }

@@ -27,16 +27,18 @@ type payload struct {
 	err error
 }
 
-func Proxy(listener net.Listener, target string, filter Filter) error {
+func Proxy(listener net.Listener, target string, filters []Filter) error {
 	for {
 		incoming, err := listener.Accept()
 		if err != nil {
 			return err
 		}
-		if !filter.Accept(incoming) {
-			// filter says to throw out this connection
-			incoming.Close()
-			continue
+		for _, filter := range filters {
+			if !filter.Accept(incoming) {
+				// filter says to throw out this connection
+				incoming.Close()
+				continue
+			}
 		}
 
 		outgoing, err := net.Dial("tcp", target)
@@ -57,8 +59,10 @@ func Proxy(listener net.Listener, target string, filter Filter) error {
 					err = inp.err
 					continue
 				}
-				if err = filter.Write(inp.p); err != nil {
-					continue
+				for _, filter := range filters {
+					if err = filter.Write(inp.p); err != nil {
+						continue
+					}
 				}
 				_, err = outgoing.Write(inp.p)
 			case outp := <-out:
@@ -66,18 +70,22 @@ func Proxy(listener net.Listener, target string, filter Filter) error {
 					err = outp.err
 					continue
 				}
-				if err = filter.Read(outp.p); err != nil {
-					continue
+				for _, filter := range filters {
+					if err = filter.Read(outp.p); err != nil {
+						continue
+					}
 				}
 				_, err = incoming.Write(outp.p)
 			}
 		}
 		incoming.Close()
 		outgoing.Close()
-		if !filter.Close(err) {
-			// Don't return the connection error - only return unexpected internal
-			// errors.
-			return nil
+		for _, filter := range filters {
+			if !filter.Close(err) {
+				// Don't return the connection error - only return unexpected internal
+				// errors.
+				return nil
+			}
 		}
 	}
 }

@@ -5,13 +5,23 @@ import (
 	"io"
 	"net"
 	"time"
+
+	"github.com/schmichael/netdbg"
 )
+
+func init() {
+	RegisterFilter(humanLoggerName, newHumanLogger)
+}
+
+const humanLoggerName = "log"
 
 type HumanLogger struct {
 	start time.Time
 	sent  uint64
 	recv  uint64
 }
+
+func newHumanLogger() netdbg.Filter { return &HumanLogger{} }
 
 func (h *HumanLogger) Accept(c net.Conn) bool {
 	h.start = time.Now()
