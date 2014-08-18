@@ -5,6 +5,7 @@ import (
 	"net"
 )
 
+// Filter is the core interface for implementing network traffic filters.
 type Filter interface {
 	// Accept is called when a new incoming connection is created. Returning
 	// false will cause the connection to be closed. Returning true will cause a
