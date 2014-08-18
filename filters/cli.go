@@ -8,6 +8,7 @@ import (
 type HumanLogger struct{}
 
 func (*HumanLogger) Accept(c net.Conn) bool {
+	fmt.Printf("=> %v => %v\n", c.RemoteAddr(), c.LocalAddr())
 	return true
 }
 
@@ -24,5 +25,3 @@ func (*HumanLogger) Read(p []byte) error {
 func (*HumanLogger) String() string {
 	return "human-logger"
 }
-
-type Raw struct{}
