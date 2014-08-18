@@ -47,10 +47,10 @@ func main() {
 	}
 
 	// Create filter
-	filter := filters.HumanLogger{}
+	filter := &filters.HumanLogger{}
 
 	fmt.Fprintf(os.Stderr, "started %s → %v → %s\n", laddrFlag, filter, target)
-	fmt.Fprintf(os.Stderr, "exited with: %v\n", netdbg.Proxy(listen, target, &filter))
+	fmt.Fprintf(os.Stderr, "exited with: %v\n", netdbg.Proxy(listen, target, filter))
 }
 
 type nopWriteCloser struct {

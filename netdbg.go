@@ -16,6 +16,10 @@ type Filter interface {
 
 	// Read is called when data is received from the target host.
 	Read(p []byte) error
+
+	// Close is called when the connection ends and is passed the error. If the
+	// filter returns true, netdbg continues operation. If false, it exits.
+	Close(err error) (ok bool)
 }
 
 type payload struct {
@@ -70,7 +74,11 @@ func Proxy(listener net.Listener, target string, filter Filter) error {
 		}
 		incoming.Close()
 		outgoing.Close()
-		return err
+		if !filter.Close(err) {
+			// Don't return the connection error - only return unexpected internal
+			// errors.
+			return nil
+		}
 	}
 }
 
@@ -80,7 +88,11 @@ func read(conn net.Conn, comm chan payload) {
 		n, err := conn.Read(buf)
 		if err != nil {
 			conn.Close()
-			comm <- payload{err: err}
+			select {
+			case comm <- payload{err: err}:
+			default:
+				// receiver may have already died so don't block
+			}
 			return
 		}
 		if n == 0 {
