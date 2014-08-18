@@ -39,7 +39,7 @@ func (h *HumanLogger) Close(err error) bool {
 	if err == io.EOF {
 		msg = "↹ closed"
 	} else {
-		msg = fmt.Sprintf("↯ %v")
+		msg = fmt.Sprintf("↯ %v", err)
 	}
 	fmt.Printf("%s after %s; sent: %d  recv: %d\n", msg, dur, h.sent, h.recv)
 	return true
