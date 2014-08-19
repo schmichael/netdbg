@@ -50,7 +50,7 @@ func main() {
 	}
 
 	// Create filter
-	filterChain := []netdbg.Filter{}
+	filterChain := []filters.FilterFactory{}
 	filterNames := strings.Split(filterFlag, ",")
 	if len(filterNames) == 0 {
 		fmt.Fprintf(os.Stderr, "missing filters\n")
@@ -62,7 +62,7 @@ func main() {
 			fmt.Fprintf(os.Stderr, "unknown filter: %s\n", name)
 			usage()
 		}
-		filterChain = append(filterChain, filterFactory())
+		filterChain = append(filterChain, filterFactory)
 	}
 
 	fmt.Fprintf(os.Stderr, "started %s → %v → %s\n", laddrFlag, filterFlag, target)

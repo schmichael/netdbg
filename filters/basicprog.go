@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"io"
 	"net"
-
-	"github.com/schmichael/netdbg"
 )
 
 func init() {
@@ -14,9 +12,14 @@ func init() {
 
 const basicProgressName = "prog"
 
-type BasicProgress struct{}
+type BasicProgress struct {
+	writerIn  chan []byte
+	writerOut chan []byte
+	readerIn  chan []byte
+	readerOut chan []byte
+}
 
-func newBasicProgress() netdbg.Filter { return &BasicProgress{} }
+func newBasicProgress() Filter { return &BasicProgress{} }
 
 func (*BasicProgress) Accept(net.Conn) bool {
 	fmt.Print("⇄")
