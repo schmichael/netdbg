@@ -3,7 +3,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	"io"
 	"net"
 	"os"
 	"strings"
@@ -12,9 +11,12 @@ import (
 	"github.com/schmichael/netdbg/filters"
 )
 
+const usageStr = `%s usage: %s [filters] [listen host:port] [target host:port]
+filters = client-filter-1:client-filter-2,server-filter-1:server-filter-2
+`
+
 func usage() {
-	fmt.Fprintf(os.Stderr,
-		"%s usage: %s [filters] [listen host:port] [target host:port]\n", os.Args[0], os.Args[0])
+	fmt.Fprintf(os.Stderr, usageStr, os.Args[0], os.Args[0])
 	os.Exit(1)
 }
 
@@ -50,31 +52,31 @@ func main() {
 	}
 
 	// Create filter
-	filterChain := []filters.FilterFactory{}
-	filterNames := strings.Split(filterFlag, ",")
-	if len(filterNames) == 0 {
+	filterParts := strings.Split(filterFlag, ",")
+	if len(filterParts) == 0 {
 		fmt.Fprintf(os.Stderr, "missing filters\n")
 		usage()
 	}
-	for _, name := range filterNames {
-		filterFactory := filters.GetFilter(name)
-		if filterFactory == nil {
+	clientFilters := parseFilters(filterParts[0])
+	var serverFilters []filters.FilterFactory
+	if len(filterParts) > 1 {
+		serverFilters = parseFilters(filterParts[1])
+	}
+
+	fmt.Fprintf(os.Stderr, "started %s ⇄ %v ⇄ %s\n", laddrFlag, filterFlag, target)
+	err = netdbg.Proxy(listen, target, clientFilters, serverFilters)
+	fmt.Fprintf(os.Stderr, "exited with: %v\n", err)
+}
+
+func parseFilters(filterList string) []filters.FilterFactory {
+	filterChain := []filters.FilterFactory{}
+	for _, name := range strings.Split(filterList, ":") {
+		ffact := filters.GetFilter(name)
+		if ffact == nil {
 			fmt.Fprintf(os.Stderr, "unknown filter: %s\n", name)
 			usage()
 		}
-		filterChain = append(filterChain, filterFactory)
+		filterChain = append(filterChain, ffact)
 	}
-
-	fmt.Fprintf(os.Stderr, "started %s → %v → %s\n", laddrFlag, filterFlag, target)
-	fmt.Fprintf(os.Stderr, "exited with: %v\n", netdbg.Proxy(listen, target, filterChain))
+	return filterChain
 }
-
-type nopWriteCloser struct {
-	io.Writer
-}
-
-func NopWriteCloser(w io.Writer) io.WriteCloser {
-	return nopWriteCloser{w}
-}
-
-func (nopWriteCloser) Close() error { return nil }

@@ -7,6 +7,13 @@ import (
 	"time"
 )
 
+var (
+	hlogSymbol = map[Role]string{
+		Client: "⇨",
+		Server: "⇦",
+	}
+)
+
 func init() {
 	RegisterFilter(humanLoggerName, newHumanLogger)
 }
@@ -14,60 +21,41 @@ func init() {
 const humanLoggerName = "log"
 
 type HumanLogger struct {
-	writerIn  chan []byte
-	writerOut chan []byte
-	readerIn  chan []byte
-	readerOut chan []byte
+	in  <-chan []byte
+	out chan<- []byte
 
+	role  Role
 	start time.Time
-	sent  uint64
-	recv  uint64
+	count uint64
 }
 
-func newHumanLogger(win chan []byte, rin chan []byte) (Filter, chan []byte, chan []byte) {
-	h := HumanLogger{}
-	h.writerIn = win
-	h.writerOut = make(chan []byte)
-	h.readerIn = rin
-	h.readerOut = make(chan []byte)
-	go h.write()
-	go h.read()
-	return &h, h.writerOut, h.readerOut
+func newHumanLogger(r Role, i <-chan []byte, o chan<- []byte) Filter {
+	h := HumanLogger{
+		in:    i,
+		out:   o,
+		role:  r,
+		start: time.Now(),
+	}
+	go h.handle(hlogSymbol[r])
+	return &h
 }
 
 func (h *HumanLogger) Accept(c net.Conn) bool {
-	h.start = time.Now()
-	h.sent = 0
-	h.recv = 0
 	fmt.Printf("  %v ⇄ %v\n", c.RemoteAddr(), c.LocalAddr())
 	return true
 }
 
-func (h *HumanLogger) write() {
+func (h *HumanLogger) handle(sym string) {
 	for {
-		p, ok := <-h.writerIn
+		p, ok := <-h.in
 		if !ok {
-			close(h.writerOut)
+			close(h.out)
 			return
 		}
 
-		h.sent += uint64(len(p))
-		fmt.Printf("⇨ %q\n", p)
-		h.writerOut <- p
-	}
-}
-
-func (h *HumanLogger) read() {
-	for {
-		p, ok := <-h.readerIn
-		if !ok {
-			close(h.readerOut)
-			return
-		}
-
-		h.recv += uint64(len(p))
-		fmt.Printf("⇦ %q\n", p)
-		h.readerOut <- p
+		h.count += uint64(len(p))
+		fmt.Printf("%s %q\n", sym, p)
+		h.out <- p
 	}
 }
 
@@ -79,7 +67,7 @@ func (h *HumanLogger) Close(err error) bool {
 	} else {
 		msg = fmt.Sprintf("↯ %v", err)
 	}
-	fmt.Printf("%s after %s; sent: %d  recv: %d\n", msg, dur, h.sent, h.recv)
+	fmt.Printf("%s: %s after %s; bytes: %d\n", h.role, msg, dur, h.count)
 	return true
 }
 

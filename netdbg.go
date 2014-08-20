@@ -15,78 +15,89 @@ type payload struct {
 // Proxy routes data from clients that connect to the listener and the target.
 // All traffic is passed through filters which are created per-connection.
 // Connections are handled serially as are calls to the filter chain.
-func Proxy(listener net.Listener, target string, filterFuncs []filters.FilterFactory) error {
+func Proxy(listener net.Listener, target string, clientFF, serverFF []filters.FilterFactory) error {
 	for {
-		writerInput := make(chan []byte)
-		readerInput := make(chan []byte)
-
-		// Create fresh filters for each connection
-		win := writerInput
-		rin := readerInput
-		var filter filters.Filter
-		filterChain := []filters.Filter{}
-		for _, filterFunc := range filterFuncs {
-			var filter filters.Filter
-			filter, win, rin = filterFunc(win, rin)
-			filterChain = append(filterChain, filter)
+		// Setup client chain
+		clientFilters := []filters.Filter{}
+		clientIn := make(chan []byte)
+		clientOut := clientIn
+		cin := clientIn
+		for _, filterFunc := range clientFF {
+			clientOut = make(chan []byte)
+			filter := filterFunc(filters.Client, cin, clientOut)
+			clientFilters = append(clientFilters, filter)
+			cin = clientOut
 		}
 
-		// Last two returned chans are the outputs
-		writerOutput := win
-		readerOutput := rin
+		// Setup server chain
+		serverFilters := []filters.Filter{}
+		serverIn := make(chan []byte)
+		serverOut := serverIn
+		sin := serverIn
+		for _, filterFunc := range serverFF {
+			serverOut = make(chan []byte)
+			filter := filterFunc(filters.Server, sin, serverOut)
+			serverFilters = append(serverFilters, filter)
+			sin = serverOut
+		}
 
-		incoming, err := listener.Accept()
+		// Wait for a new connection
+		client, err := listener.Accept()
 		if err != nil {
 			return err
 		}
-		for _, filter := range filterChain {
-			if !filter.Accept(incoming) {
+		for _, filter := range serverFilters {
+			if !filter.Accept(client) {
 				// filter says to throw out this connection
-				incoming.Close()
+				client.Close()
 				continue
 			}
 		}
 
-		outgoing, err := net.Dial("tcp", target)
+		server, err := net.Dial("tcp", target)
 		if err != nil {
-			incoming.Close()
+			client.Close()
 			return err
 		}
 
-		in := make(chan payload)
-		out := make(chan payload)
-		go read(incoming, in)
-		go read(outgoing, out)
+		clientAct := make(chan payload)
+		serverAct := make(chan payload)
+		go read(client, clientAct)
+		go read(server, serverAct)
 
 		for err == nil {
 			select {
-			case inp := <-in:
-				if inp.err != nil {
-					err = inp.err
+			case act := <-clientAct:
+				if act.err != nil {
+					err = act.err
 					continue
 				}
-				writerInput <- inp.p
-			case writerOut := <-writerOutput:
-				_, err = outgoing.Write(writerOut)
-			case outp := <-out:
-				if outp.err != nil {
-					err = outp.err
+				clientIn <- act.p
+			case p := <-clientOut:
+				_, err = server.Write(p)
+			case act := <-serverAct:
+				if act.err != nil {
+					err = act.err
 					continue
 				}
-				readerInput <- outp.p
-			case readerOut := <-readerOutput:
-				_, err = incoming.Write(readerOut)
+				serverIn <- act.p
+			case p := <-serverOut:
+				_, err = client.Write(p)
 			}
 		}
-		close(writerInput)
-		close(readerInput)
-		incoming.Close()
-		outgoing.Close()
-		for _, filter := range filterChain {
-			if !filter.Close(err) {
-				// Don't return the connection error - only return unexpected internal
-				// errors.
-				return nil
+
+		// There was an error
+		close(clientIn)
+		close(serverIn)
+		client.Close()
+		server.Close()
+		for _, filterChain := range [][]filters.Filter{clientFilters, serverFilters} {
+			for _, filter := range filterChain {
+				if !filter.Close(err) {
+					// Don't return the connection error - only return unexpected internal
+					// errors.
+					return nil
+				}
 			}
 		}
 	}
