@@ -4,7 +4,7 @@ netdbg
 Network protocol proxy/debugger. A transparent proxy between clients and
 servers to ease protocol debugging and degenerate case testing.
 
-Very early/experimental. Not even a toy at this point.
+Very early/experimental. Just a toy. Interfaces may change wildly.
 
 ```sh
 go get github.com/schmichael/netdbg/cmd/netdbg
