@@ -31,3 +31,25 @@ Each filter can be used on data the *client sends* or on data the *server sends*
 
 To cleanly shutdown the filter pipeline a filter must close its `out`
 chan when their `in` chan is closed. 
+
+Future
+======
+
+Implement Filters as WriteClosers, initialize in reverse, and give the next
+filter in the chain to the filter new function. Last filter in chain would be
+given actual net.Conn as writer.
+
+**Pros**
+
+* Clearer: Filter interface would make how to implement Filters clear again.
+* Simpler: No more chan management.
+* Reusable: Easy to reuse existing Writers (bzip, gzip, etc) in filters.
+
+**Cons**
+
+* Not always simpler: Write() methods would have to be reentrant as a prior
+  filter could be concurrently calling it. Makes races much easier to write on
+  filters with state.
+
+
+*Could we provide both APIs?*
