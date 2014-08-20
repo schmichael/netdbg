@@ -15,6 +15,9 @@ netdbg prog,prog localhost:8080 google.com:80
 # Prints escaped version of sent and received data
 netdbg log,log localhost:8080 google.com:80
 
+# Slow loris attack: send 1 byte per second and print progress
+netdbg slow:prog,prog localhost:8080 google.com:80
+
 # In another terminal
 curl localhost:8080 > /dev/null
 ```
